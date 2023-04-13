@@ -1,0 +1,1069 @@
+---
+title: "Instagram Analytics"
+author: "Sapna Maduraimuthu"
+date: "2023-02-10"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# R Package installation 
+
+```{r}
+install.packages("tidyverse")
+install.packages("dplyr")
+install.packages("tidytext")
+install.packages("wordcloud2")
+install.packages("ggplot2")
+```
+
+# Loading R libraries
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(tidytext)
+library(wordcloud2)
+library(ggplot2)
+```
+
+# Importing the dataset into the R studio
+
+```{r}
+#Post_info <- read.csv(file = '~/Instalytics/Post_info.csv')
+Post_info$hashtags_list <- gsub("\\[", "", Post_info$hashtags_list)
+Post_info$hashtags_list <- gsub("\\]", "", Post_info$hashtags_list)
+Post_info$hashtags_list <- gsub("\\'", "", Post_info$hashtags_list)
+Post_info$hashtags_list <- gsub("\\,","", Post_info$hashtags_list)
+#Prof_info <- read.csv(file = '~/Instalytics/Prof_info.csv')
+Following <- as.integer(Prof_info[nrow(Prof_info), ])
+Followers <- as.integer(Prof_info[nrow(Prof_info)-1, ])
+Post_info$likecomment <- Post_info$likes_list + Post_info$Comments_list
+# Post_info$date <- as.Date(substr(Post_info$date_list,1,10))
+Post_info$date <- as.Date(Post_info$date_list)
+Post_info$weekday <- weekdays(Post_info$date)
+Post_info$Engagement_Rate <- (((Post_info$likes_list + Post_info$Comments_list) / Followers)*100)
+Post_info <- Post_info %>%
+  mutate(Post_Number = nrow(.) - row_number() + 1)
+Trend_df <- Post_info %>%
+  select(date, likes_list,Comments_list,Engagement_Rate,sentiment_scores)
+
+```
+
+#Animated Word Cloud Dashboard
+#Captions Wordcloud
+
+```{r}
+
+# raw_text <- c()
+# for (values in Post_info$Caption_list){
+#     raw_text <- append(values,raw_text)
+# }
+# raw_text_df <- data.frame(tibble(line = 1:nrow(Post_info), text = raw_text))
+# single_line_text<- paste(raw_text_df$text, collapse = " ")
+# pattern <- "\\s*#\\S+"
+# single_linetext <- gsub(pattern, "", single_line_text)
+# raw_text_df<- data.frame(words = single_linetext)
+# raw_text_df$words <- strsplit(raw_text_df$words, " ")
+# words_vector <- unlist(raw_text_df$words)
+# word_frequency <- table(words_vector)
+# raw_text_df<- as.data.frame(word_frequency)
+# exclude <- c("and","or","&","for","but","yet","so")
+# names(raw_text_df) <- c("word", "frequency")
+# wordcloud2(raw_text_df,size = 3.5, color = "random-dark",minRotation = -pi/6, maxRotation = -pi/6, rotateRatio = 1)
+
+```
+
+
+
+#A word cloud using hashtag is created in the below section of the code chunk
+
+```{r word cloud of hashtag}
+raw_text <- c()
+for (values in Post_info$hashtags_list){
+    raw_text <- append(values,raw_text)
+}
+
+library(tm) # for text preprocessing
+
+text <- c()
+# Example text
+for (i in Post_info$Caption_list){
+  text <- append(i,text)
+}
+
+# Convert the text to a corpus object
+corpus <- Corpus(VectorSource(text))
+
+# Perform some text preprocessing
+corpus <- tm_map(corpus, content_transformer(tolower))
+corpus <- tm_map(corpus, removePunctuation)
+corpus <- tm_map(corpus, removeNumbers)
+corpus <- tm_map(corpus, removeWords, stopwords("english"))
+
+# Create a term-document matrix
+tdm <- TermDocumentMatrix(corpus)
+# Convert the term-document matrix to a data frame
+m <- as.data.frame(as.matrix(tdm))
+m$frequency <- (rowSums(m[1:nrow(m),1:ncol(m)]))
+wordcloud_data <- data.frame(word = tdm$dimnames[[1]],frequency = m$frequency)
+
+custom_palette <- function(n) {
+  sample(rgb(runif(n, 0, 1), runif(n, 0, 1), runif(n, 0, 1)), n)
+}
+
+
+
+      wordcloud2(wordcloud_data,
+                 size = 3.5, color = custom_palette(500),
+                 minRotation = -pi/6, 
+                 maxRotation = -pi/6, 
+                 rotateRatio = 1,
+                 backgroundColor = "transparent")
+```
+
+
+
+```{r,warning=FALSE}
+top10 <- head(wordcloud_data[order(-wordcloud_data$frequency),], 10) %>% 
+  group_by(word) %>% summarise(Percentage=frequency/nrow(.))
+top10 <- top10[order(-top10$frequency),]
+barplot(top10$frequency, horiz = TRUE, names.arg = top10$word,font.axis = 1, xlab = "Count", ylab = "Items",las = 1)
+BLUE <- "#076fa2"
+RED <- "#E3120B"
+BLACK <- "#202020"
+GREY <- "grey50"
+top10$name <- factor(top10$word,levels = top10$word)
+top10$y <- seq(length(top10$word))*0.9
+plt <- ggplot(top10[order(top10$frequency),]) +
+  geom_col(aes(frequency, word), fill = BLUE, width = 0.6) +
+  scale_y_discrete(expand = expansion(add = c(0, 0.5))) +
+  theme(
+    # Set background color to white
+    panel.background = element_rect(fill = "white"),
+    # Set the color and the width of the grid lines for the horizontal axis
+    panel.grid.major.x = element_line(color = "#A8BAC4", size = 0.3),
+    # Remove tick marks by setting their length to 0
+    axis.ticks.length = unit(0, "mm"),
+    # Remove the title for both axes
+    axis.title = element_blank(),
+    # Only left line of the vertical axis is painted in black
+    axis.line.y.left = element_line(color = "black"),
+    # Remove labels from the vertical axis
+    axis.text.y = element_blank(),
+    # But customize labels for the horizontal axis
+    axis.text.x = element_text(family = "Econ Sans Cnd", size = 8)
+  )
+
+```
+
+
+
+```{r}
+library(packcircles)
+library(ggplot2)
+library(viridis)
+library(plotly)
+
+top10 <- head(wordcloud_data[order(-wordcloud_data$frequency),], 10) %>% 
+  group_by(word) %>% summarise(Percentage=frequency/nrow(.))
+top10$Percentage <- round(top10$Percentage,0)
+packing <- circleProgressiveLayout(top10$Percentage, sizetype='area')
+packing$radius <- 0.95*packing$radius
+data <- cbind(top10, packing)
+dat.gg <- circleLayoutVertices(packing, npoints=50)
+
+plt <- ggplot() + 
+  geom_polygon(data = dat.gg, aes(x, y, group = id, fill=id), colour = "black", alpha = 0.6) +
+  scale_fill_viridis() +
+  geom_text(data = data, aes(x,y, size=Percentage, label = word), color="black") +
+  theme_void() + 
+  theme(legend.position="none")+ 
+  coord_equal()
+
+ggplotly(plt)%>% 
+  layout(
+    xaxis = list(showgrid = FALSE),
+    yaxis = list(showgrid = FALSE),
+    plot_bgcolor = "transparent", 
+    paper_bgcolor = "transparent",
+    hoverlabel = list(bgcolor = "transparent", font = list(family = "Arial", size = 14, color = "black")))
+
+```
+
+```{r, warning=False}
+
+library(wordcloud)
+library(tm) # for text preprocessing
+
+# Example text
+for (i in Post_info$Caption_list){
+  text <- append(values,raw_text)
+}
+
+# Convert the text to a corpus object
+corpus <- Corpus(VectorSource(text))
+
+# Perform some text preprocessing
+corpus <- tm_map(corpus, content_transformer(tolower))
+corpus <- tm_map(corpus, removePunctuation)
+corpus <- tm_map(corpus, removeNumbers)
+corpus <- tm_map(corpus, removeWords, stopwords("english"))
+
+# Create a term-document matrix
+tdm <- TermDocumentMatrix(corpus)
+
+# Convert the term-document matrix to a data frame
+m <- as.data.frame(as.matrix(tdm))
+m$frequency <- (rowSums(m[1:nrow(m),1:ncol(m)]))
+
+# Create the wordcloud
+set.seed(1234) # for reproducibility
+wordcloud(words = tdm$dimnames[[1]], freq = m$frequency,
+          min.freq = 1, max.words = 200, random.order = FALSE,
+          rot.per = 0.35, colors = brewer.pal(8, "Dark2"), scale = c(5,20))
+
+
+
+
+```
+
+
+```{r}
+# libraries:
+library(ggplot2)
+library(gganimate)
+ 
+ 
+# Basic barplot:
+ggplot(top10, aes(x=word, y=frequency, fill=word)) + 
+  geom_bar(stat='identity')
+ 
+# Make a ggplot, but add frame=year: one image per year
+p <- ggplot(top10, aes(x=word, y=frequency, fill=word)) + 
+  geom_bar(stat="identity") +
+  theme_bw() +
+  # gganimate specific bits:
+  transition_states(
+    name,
+    transition_length = 2,
+    state_length = 1
+  ) +
+  ease_aes('sine-in-out')
+animation = animate(p)
+# Save at gif:
+anim_save("288-animated-barplot-transition.gif")
+```
+
+#Sentiment Analysis on Captions
+
+```{r}
+library(tidytext)
+library(syuzhet)
+final <- list()
+# Create a sample sentence to analyze
+for (x in 1:nrow(Post_info)){
+sentence <- Post_info$Caption_list[x]
+
+# Tokenize the sentence using tidytext
+tokenized_text <- tibble(text = sentence) %>% 
+  unnest_tokens(word, text)
+
+# Get the sentiment score for each word using syuzhet's AFINN method
+sentiment_scores <- get_sentiment(tokenized_text$word, method = "afinn")
+
+# Calculate the overall sentiment score for the sentence
+sentence_sentiment <- sum(sentiment_scores)
+final[[x]] <- sentence_sentiment
+# Display the resulting sentiment score for the sentence
+}
+Post_info$SentimentScores <- as.integer(final)
+```
+
+```{r}
+
+ggplot(Post_info, aes(x = Engagement_Rate, y = SentimentScores)) +
+   geom_bin2d(bins = 70) +
+  scale_fill_continuous(type = "viridis") +
+  theme_bw()
+
+```
+
+```{r}
+cols_to_transpose <- c("Comments_list", "likes_list", "Engagement_Rate","SentimentScores")
+
+# Transpose selected columns
+transposed_df <- t(Post_info[, cols_to_transpose])
+
+# Convert transposed matrix back to data frame
+transposed_df <- as.data.frame(transposed_df)
+
+# Add column names to transposed data frame
+colnames(transposed_df) <- Post_info$Post_Number
+
+# Print transposed data frame
+transposed_df
+```
+
+```{r}
+df_new <- transposed_df %>% 
+  gather(key = "Column",value = "Value")
+df_new$Category <- c("Comments","Likes","Engagement Rate","Sentiment Score")
+df_new$Column <- as.integer(df_new$Column)
+ggplot(df_new, aes(x = Column, y = Value, fill = Category)) + 
+  geom_line()+
+  ylim(0,500)
+
+```
+
+```{r}
+library(kableExtra)
+
+# Create a sample data frame
+df <- data.frame(image_url = c("https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fimages.pexels.com%2Fphotos%2F459225%2Fpexels-photo-459225.jpeg%3Fcs%3Dsrgb%26dl%3Ddaylight-environment-forest-459225.jpg%26fm%3Djpg&f=1&nofb=1&ipt=b816f4d69b9551eaa5f87511da71b92e4e93eaf9e3213adb855a488e508e5587&ipo=images",
+                               "https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fimages.pexels.com%2Fphotos%2F459225%2Fpexels-photo-459225.jpeg%3Fcs%3Dsrgb%26dl%3Ddaylight-environment-forest-459225.jpg%26fm%3Djpg&f=1&nofb=1&ipt=b816f4d69b9551eaa5f87511da71b92e4e93eaf9e3213adb855a488e508e5587&ipo=images",
+                               "https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fimages.pexels.com%2Fphotos%2F459225%2Fpexels-photo-459225.jpeg%3Fcs%3Dsrgb%26dl%3Ddaylight-environment-forest-459225.jpg%26fm%3Djpg&f=1&nofb=1&ipt=b816f4d69b9551eaa5f87511da71b92e4e93eaf9e3213adb855a488e508e5587&ipo=images"),
+                 value = c(10, 20, 30))
+
+# Create a function to format the image URLs as HTML tags
+img_html <- function(url) {
+  sprintf('<img src="%s" width="100">', url)
+}
+
+# Apply the function to the image_url column
+df$image_html <- sapply(df$image_url, img_html)
+
+# Create a table with the formatted image URLs and values
+kable(df[, c("image_html", "value")], format = "html", escape = FALSE) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE)
+
+```
+
+```{r}
+library(plotly)
+
+
+fig <- plot_ly(Post_info, x = ~date, y = ~likecomment, type = 'scatter',mode = 'markers',fill = 'tozeroy', name = 'Likes', marker = list(color = 'white'),line = list(color = "white")) %>%   layout(
+    xaxis = list(
+      rangeselector = list(
+        buttons = list(
+          list(count = 7, label = "1w", step = "day", stepmode = "backward"),
+          list(count = 1, label = "1m", step = "month", stepmode = "backward"),
+          list(count = 3, label = "3m", step = "month", stepmode = "backward"),
+          list(count = 6, label = "6m", step = "month", stepmode = "backward"),
+          list(count = 1, label = "1y", step = "year", stepmode = "backward"),
+          list(step = "all")
+        )
+      ),
+      rangeslider = list()
+    )
+  )
+
+
+fig
+ 
+```
+
+```{r}
+library(plotly)
+
+# Create plotly line chart
+plot_ly(line = list(color = "white")) %>%
+  add_lines(x = Post_info$date, y = Post_info$likecomment, name = "Trend on the Likes and Comment") %>%
+  layout(
+    xaxis = list(
+      rangeselector = list(
+        buttons = list(
+          list(count = 7, label = "1w", step = "day", stepmode = "backward"),
+          list(count = 1, label = "1m", step = "month", stepmode = "backward"),
+          list(count = 3, label = "3m", step = "month", stepmode = "backward"),
+          list(count = 6, label = "6m", step = "month", stepmode = "backward"),
+          list(count = 1, label = "1y", step = "year", stepmode = "backward"),
+          list(step = "all")
+        )
+      ),
+      rangeslider = list()
+    )
+  )
+
+```
+
+
+```{r}
+
+# Find Pearson's correlation coefficient
+correlation <- cor(Post_info$Engagement_Rate, Post_info$SentimentScores)
+
+# Print the correlation coefficient
+cat("Pearson's correlation coefficient:", round(cor(Post_info$Engagement_Rate, Post_info$SentimentScores),3), "\n")
+
+```
+
+```{r}
+
+# min-max scaling
+Post_info$Engagement_Rate_norm <- (Post_info$Engagement_Rate - min(Post_info$Engagement_Rate)) / (max(Post_info$Engagement_Rate) - min(Post_info$Engagement_Rate))
+Post_info$SentimentScores_norm <- (Post_info$SentimentScores - min(Post_info$SentimentScores)) / (max(Post_info$SentimentScores) - min(Post_info$SentimentScores))
+
+# print normalized data
+cat("var1 normalized:", Post_info$Engagement_Rate_norm, "\n")
+cat("var2 normalized:", Post_info$SentimentScores_norm, "\n")
+
+```
+
+```{r}
+library(plotly)
+
+# Calculate correlation
+corr <- round(cor(Post_info$Engagement_Rate, Post_info$SentimentScores), 2)
+
+# Create scatter plot with text annotation
+p <- plot_ly(x = Post_info$Engagement_Rate, y = Post_info$likecomment, mode = "markers") %>%
+  add_annotations(xref = "Post Engagement Rate", yref = "Sentiment Scores",
+                  x = 0.5, y = 1.05,
+                  text = paste0("Correlation: ", corr),
+                  showarrow = FALSE) %>%
+  layout(xaxis = list(title = "X"), yaxis = list(title = "Y"))
+
+# Display the chart
+p
+
+```
+
+```{r}
+library(plotly)
+
+value <- round(mean(Post_info$Engagement_Rate) * 10,2) # the value to display on the speedometer
+range_min <- 0  # the minimum value of the scale
+range_max <- 100  # the maximum value of the scale
+
+# create the gauge chart with colored ranges
+chart <- plot_ly(
+  type = "indicator",
+  mode = "gauge+number",
+  gauge = list(
+    axis = list(range = list(range_min, range_max)),
+    bar = list(color = "#1f77b4"),
+    steps = list(
+      list(range = c(range_min, range_max/3), color = "#FF4136"),
+      list(range = c(range_max/3, range_max*2/3), color = "#FFDC00"),
+      list(range = c(range_max*2/3, range_max), color = "#2ECC40")
+    )
+  ),
+  value = value,
+  number = list(suffix = "%"),
+  domain = list(x = c(0, 1), y = c(0, 1))
+)
+
+# add a scatter trace with a single point representing the needle
+chart <- chart %>%
+  add_trace(
+    type = "scatter",
+    x = c(0.5),
+    y = c(0.5),
+    mode = "markers",
+    marker = list(
+      symbol = "triangle-up",
+      size = 20,
+      color = "#000000"
+    ),
+    showlegend = FALSE
+  )
+
+# update the layout to hide the axis labels and ticks
+chart <- chart %>%
+  layout(
+    xaxis = list(
+      showticklabels = FALSE,
+      zeroline = FALSE,
+      showgrid = FALSE
+    ),
+    yaxis = list(
+      showticklabels = FALSE,
+      zeroline = FALSE,
+      showgrid = FALSE
+    ),
+    margin = list(l = 20, r = 20, t = 20, b = 20)
+  )
+
+chart  # display the chart
+
+
+```
+
+```{r}
+library(plotly)
+
+value <- round(mean(Post_info$SentimentScores),2) # the value to display on the speedometer
+range_min <- -20  # the minimum value of the scale
+range_max <- 20  # the maximum value of the scale
+
+# create the gauge chart with colored ranges
+chart <- plot_ly(
+  type = "indicator",
+  mode = "gauge+number",
+  gauge = list(
+    axis = list(range = list(range_min, range_max)),
+    bar = list(color = "#1f77b4"),
+    steps = list(
+      list(range = c(range_min, -3), color = "#FF4136"),
+      list(range = c(-3, 3), color = "#FFDC00"),
+      list(range = c(3, range_max), color = "#2ECC40")
+    )
+  ),
+  value = value,
+  number = list(suffix = "%"),
+  domain = list(x = c(0, 1), y = c(0, 1))
+)
+
+# add a scatter trace with a single point representing the needle
+chart <- chart %>%
+  add_trace(
+    type = "scatter",
+    x = c(0.5),
+    y = c(0.5),
+    mode = "markers",
+    marker = list(
+      symbol = "triangle-up",
+      size = 20,
+      color = "#000000"
+    ),
+    showlegend = FALSE
+  )
+
+# update the layout to hide the axis labels and ticks
+chart <- chart %>%
+  layout(
+    xaxis = list(
+      showticklabels = FALSE,
+      zeroline = FALSE,
+      showgrid = FALSE
+    ),
+    yaxis = list(
+      showticklabels = FALSE,
+      zeroline = FALSE,
+      showgrid = FALSE
+    ),
+    margin = list(l = 20, r = 20, t = 20, b = 20)
+  )
+
+chart  # display the chart
+
+```
+
+```{r}
+library(kableExtra)
+
+# Create a function to format the image URLs as HTML tags
+img_html <- function(url) {
+  sprintf('<img src="%s" width="100">', url)
+}
+
+# Apply the function to the image_url column
+Post_info$image_html <- sapply(Post_info$url_list, img_html)
+
+# Create a table with the formatted image URLs and values
+kable(head(Post_info[order(-Post_info$Engagement_Rate), c("image_html", "Engagement_Rate")], 5), format = "html", escape = FALSE) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE)
+
+kable(head(Post_info[order(Post_info$Engagement_Rate), c("image_html", "Engagement_Rate")], 5), format = "html", escape = FALSE) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE)
+
+kable(head(Post_info[order(-Post_info$SentimentScores), c("image_html", "SentimentScores")], 5), format = "html", escape = FALSE) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE)
+
+kable(head(Post_info[order(Post_info$SentimentScores), c("image_html", "SentimentScores")], 5), format = "html", escape = FALSE) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE)
+
+```
+
+```{r}
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+
+
+# Calculate the number of posts per day
+daily_post_count <- Post_info %>%
+  group_by(date) %>%
+  summarize(post_count = n())
+
+# Calculate the number of posts per week
+weekly_post_count <- Post_info %>%
+  group_by(year = year(date), week = week(date)) %>%
+  summarize(post_count = n())
+
+# Calculate the number of posts per month
+monthly_post_count <- Post_info %>%
+  group_by(year = year(date), month = month(date)) %>%
+  summarize(post_count = n())
+
+
+
+```
+
+```{r}
+library(kableExtra)
+
+# Create a sample data frame
+df <- data.frame(image_url = c("https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fimages.pexels.com%2Fphotos%2F459225%2Fpexels-photo-459225.jpeg%3Fcs%3Dsrgb%26dl%3Ddaylight-environment-forest-459225.jpg%26fm%3Djpg&f=1&nofb=1&ipt=b816f4d69b9551eaa5f87511da71b92e4e93eaf9e3213adb855a488e508e5587&ipo=images",
+                               "https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fimages.pexels.com%2Fphotos%2F459225%2Fpexels-photo-459225.jpeg%3Fcs%3Dsrgb%26dl%3Ddaylight-environment-forest-459225.jpg%26fm%3Djpg&f=1&nofb=1&ipt=b816f4d69b9551eaa5f87511da71b92e4e93eaf9e3213adb855a488e508e5587&ipo=images",
+                               "https://scontent-ord5-2.cdninstagram.com/v/t51.2885-15/339347271_1409603593123512_7105702982552979917_n.jpg?stp=dst-jpg_e35&_nc_ht=scontent-ord5-2.cdninstagram.com&_nc_cat=100&_nc_ohc=nCRWoMBwuiwAX-a-2HI&edm=AOQ1c0wBAAAA&ccb=7-5&ig_cache_key=MzA3MzcxNTQ3NTkyNjY4NTY1NQ%3D%3D.2-ccb7-5&oh=00_AfDABin-CufVjX5kb5rV-O05gXZGzvleq5ryyV4sNcOm1g&oe=64334D90&_nc_sid=8fd12b"),
+                 value = c(10, 20, 30))
+
+# Create a function to format the image URLs as HTML tags
+img_html <- function(url) {
+  sprintf('<img src="%s" width="100">', url)
+}
+
+# Apply the function to the image_url column
+df$image_html <- sapply(df$image_url, img_html)
+
+# Create a table with the formatted image URLs and values
+kable(df[, c("image_html", "value")], format = "html", escape = FALSE) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE)
+
+```
+
+```{r}
+# create sample data frame with URL and corresponding values
+df <- data.frame(
+  url = c(
+    "https://www.instagram.com/p/CqlAK9gs943/",
+    "https://picsum.photos/300",
+    "https://picsum.photos/400",
+    "https://picsum.photos/500"
+  ),
+  value = c(4, 2, 1, 3)
+)
+
+# sort the data frame based on the value column
+df_sorted <- df[order(df$value), ]
+
+# create a new column with the HTML tag to display the image
+df_sorted$html <- paste("<img src='", df_sorted$url, "' width='100'>", sep = "")
+
+# display the table with the image URLs
+library(DT)
+datatable(df_sorted[, c("value", "html")], escape = FALSE)
+
+
+```
+
+```{r}
+library(htmltools)
+library(tidyverse)
+
+
+# create a function that generates the HTML code to display an image
+display_image <- function(url) {
+  img_tag <- tags$img(src=url, width="200px")
+  return(tags$td(img_tag))
+}
+
+# create a table that displays the sorted data frame with images
+table_body <- Post_info %>% 
+  slice_head(n=10) %>% # select top 10 posts
+  mutate(image_cell = map(url_list, display_image)) %>% 
+  select(image_cell, SentimentScores) %>% 
+  apply(1, as.list) %>% 
+  list(table_data = .)
+
+table_html <- tags$table(
+  class="table",
+  tags$thead(tags$tr(
+    tags$th("Image"),
+    tags$th("Sentiment")
+  )),
+  tags$tbody(
+    map(table_body$table_data, function(row) {
+      tags$tr(row)
+    })
+  )
+)
+
+# display the table in the RStudio Viewer pane
+html_print(table_html)
+
+```
+
+```{r}
+library(tidyverse)
+library(magick)
+library(DT)
+
+# Create a data frame with some sample data
+df <- data.frame(
+  id = 1:2,
+  name = c("John", "Jane"),
+  image_url = c(
+    "https://scontent-ord5-2.cdninstagram.com/v/t51.2885-15/339347271_1409603593123512_7105702982552979917_n.jpg?stp=dst-jpg_e35&_nc_ht=scontent-ord5-2.cdninstagram.com&_nc_cat=100&_nc_ohc=nCRWoMBwuiwAX-a-2HI&edm=AOQ1c0wBAAAA&ccb=7-5&ig_cache_key=MzA3MzcxNTQ3NTkyNjY4NTY1NQ%3D%3D.2-ccb7-5&oh=00_AfDABin-CufVjX5kb5rV-O05gXZGzvleq5ryyV4sNcOm1g&oe=64334D90&_nc_sid=8fd12b",
+    "https://scontent-ord5-2.cdninstagram.com/v/t51.2885-15/339347271_1409603593123512_7105702982552979917_n.jpg?stp=dst-jpg_e35&_nc_ht=scontent-ord5-2.cdninstagram.com&_nc_cat=100&_nc_ohc=nCRWoMBwuiwAX-a-2HI&edm=AOQ1c0wBAAAA&ccb=7-5&ig_cache_key=MzA3MzcxNTQ3NTkyNjY4NTY1NQ%3D%3D.2-ccb7-5&oh=00_AfDABin-CufVjX5kb5rV-O05gXZGzvleq5ryyV4sNcOm1g&oe=64334D90&_nc_sid=8fd12b"
+  )
+)
+
+# Download images and store them in a list
+images <- lapply(df$image_url, function(url) image_read(url))
+
+# Add the images to the data frame
+df$image <- images
+
+# Sort the data frame based on the id column
+df_sorted <- df %>% arrange(id)
+
+# Display the table with images
+# Create a table with the formatted image URLs and values
+datatable(df_sorted, options = list(pageLength = 10), rownames = FALSE) %>% 
+  formatStyle(columns = "image", value = "<img src='data:image/png;base64,#value#' />")
+
+
+```
+
+```{r}
+library(tidyverse)
+library(magick)
+
+# Create a data frame with some sample data
+df <- data.frame(
+  id = 1:2,
+  name = c("John", "Jane"),
+  image_url = c(
+    "https://scontent-ord5-2.cdninstagram.com/v/t51.2885-15/339347271_1409603593123512_7105702982552979917_n.jpg?stp=dst-jpg_e35&_nc_ht=scontent-ord5-2.cdninstagram.com&_nc_cat=100&_nc_ohc=nCRWoMBwuiwAX-a-2HI&edm=AOQ1c0wBAAAA&ccb=7-5&ig_cache_key=MzA3MzcxNTQ3NTkyNjY4NTY1NQ%3D%3D.2-ccb7-5&oh=00_AfDABin-CufVjX5kb5rV-O05gXZGzvleq5ryyV4sNcOm1g&oe=64334D90&_nc_sid=8fd12b",
+    "https://scontent-ord5-2.cdninstagram.com/v/t51.2885-15/339347271_1409603593123512_7105702982552979917_n.jpg?stp=dst-jpg_e35&_nc_ht=scontent-ord5-2.cdninstagram.com&_nc_cat=100&_nc_ohc=nCRWoMBwuiwAX-a-2HI&edm=AOQ1c0wBAAAA&ccb=7-5&ig_cache_key=MzA3MzcxNTQ3NTkyNjY4NTY1NQ%3D%3D.2-ccb7-5&oh=00_AfDABin-CufVjX5kb5rV-O05gXZGzvleq5ryyV4sNcOm1g&oe=64334D90&_nc_sid=8fd12b"
+  )
+)
+
+# Download images and store them in a list
+images <- lapply(df$image_url, function(url) image_read(url))
+
+# Add the images to the data frame
+df$image <- images
+
+# Sort the data frame based on the id column
+df_sorted <- df %>% arrange(id)
+
+# Display the table with images
+datatable(df_sorted, options = list(pageLength = 10), rownames = FALSE) %>% 
+  formatStyle(
+    columns = "image",
+    value = function(x) {
+      image_render(x)
+    }
+  )
+
+```
+
+```{r}
+library(instaR)
+
+# Set up OAuth token
+options(instagram.oauth_token = "IGQVJYQnB1U3RmTDcweHpuMHV6WENsZAFR6SVlPVlM3VWtPWG1iaHBYTER2TmRpejQ2ZA3JBSXRYbVdGRUJIN241SGo4TmVxU1RFVkR2cFlOX0trVzZAPbDJUbGd3VDdyaDJsb1hrQS1WaHZAKbUNsOTRTYwZDZD")
+
+# Fetch data for a specific user
+user_data <- getUserMedia("gvsucab", token = "IGQVJYQnB1U3RmTDcweHpuMHV6WENsZAFR6SVlPVlM3VWtPWG1iaHBYTER2TmRpejQ2ZA3JBSXRYbVdGRUJIN241SGo4TmVxU1RFVkR2cFlOX0trVzZAPbDJUbGd3VDdyaDJsb1hrQS1WaHZAKbUNsOTRTYwZDZD")
+
+# Extract top 3 posts with images and captions
+top_3_posts <- head(user_data[c("images","caption.text")], 3)
+
+# Display images and captions
+for(i in 1:3) {
+  cat(paste0("Post ", i, ":\n"))
+  cat(top_3_posts$caption.text[i], "\n")
+  image_url <- top_3_posts$images$standard_resolution$url[i]
+  image_data <- readBin(getURL(image_url, ssl.verifypeer = FALSE), what = "raw", n = Inf)
+  image <- magick::image_read(image_data)
+  magick::image_display(image)
+}
+
+
+
+```
+
+```{r}
+library(magick)
+
+# specify the URL of the image
+url <- "https://scontent-ord5-2.cdninstagram.com/v/t51.2885-15/339347271_1409603593123512_7105702982552979917_n.jpg?stp=dst-jpg_e35&_nc_ht=scontent-ord5-2.cdninstagram.com&_nc_cat=100&_nc_ohc=nCRWoMBwuiwAX-a-2HI&edm=AOQ1c0wBAAAA&ccb=7-5&ig_cache_key=MzA3MzcxNTQ3NTkyNjY4NTY1NQ%3D%3D.2-ccb7-5&oh=00_AfDABin-CufVjX5kb5rV-O05gXZGzvleq5ryyV4sNcOm1g&oe=64334D90&_nc_sid=8fd12b"
+
+# read the image from the URL
+img <- image_read(url)
+
+# display the image
+img
+
+plot(image_read(head(Post_info[order(Post_info$SentimentScores), c("url_list", "SentimentScores")], 3)[[1]][[1]]))
+
+
+
+```
+
+```{r}
+library(shiny)
+library(htmltools)
+
+url <- "https://scontent-ord5-2.cdninstagram.com/v/t51.2885-15/339347271_1409603593123512_7105702982552979917_n.jpg?stp=dst-jpg_e35&_nc_ht=scontent-ord5-2.cdninstagram.com&_nc_cat=100&_nc_ohc=nCRWoMBwuiwAX-a-2HI&edm=AOQ1c0wBAAAA&ccb=7-5&ig_cache_key=MzA3MzcxNTQ3NTkyNjY4NTY1NQ%3D%3D.2-ccb7-5&oh=00_AfDABin-CufVjX5kb5rV-O05gXZGzvleq5ryyV4sNcOm1g&oe=64334D90&_nc_sid=8fd12b"
+
+img <- tags$img(src = url)
+
+html <- tags$html(
+  tags$body(
+    img
+  )
+)
+
+htmltools::browsable(html)
+
+
+```
+
+```{r}
+library(rvest)
+#Run a search query (returning html content)
+search <- read_html("https://www.google.com/search?site=&tbm=isch&q=parrot")
+
+#Grab all <img> tags, get their "src" attribute, a URL to an image
+urls <- search %>% html_nodes("img") %>% html_attr("src") #Get urls of parrot pictures
+
+#Load the first four, return as image list, display
+map_il(urls[1:4],load.image) %>% plot
+
+```
+
+```{r}
+# Load the knitr package
+library(knitr)
+
+# Set the file name and path where the image is saved
+file_name <- "image.jpg"
+file_path <- "~/Masters Project/Instalytics/"
+
+# Create a data frame with the file name and path
+img_df <- data.frame(File = file_name, Path = file_path)
+
+# Add a new column to the data frame with HTML code to display the image
+img_df$Image <- paste0("<img src='", img_df$Path, img_df$File, "' alt='Image' width='300' height='auto'/>")
+
+# Display the data frame as a table with the image column formatted as HTML
+kable(img_df, format = "html", caption = "Downloaded Image File") 
+
+
+```
+
+```{r}
+# Load the reticulate library
+# Load the reticulate library
+library(reticulate)
+
+# Set the working directory to the folder containing the Python script
+setwd("C:/Users/17347/Documents/Instalytics")
+
+# Define the input value as a string
+
+# import the Python script
+source_python("MasterProject.py")
+
+# call the main function with the input value
+main("gvsufood")
+
+
+py_run_file("MasterProject.py")
+
+
+py_clear_last_error()
+# Call the Python script and pass the input value as an argument
+py_run_string(paste("import sys\nsys.path.append('C:/Users/17347/Documents/Instalytics')\nfrom MasterProject import main\nmain('", as.character(input_value), "')", sep = ""), convert = TRUE)
+
+
+
+library(reticulate)
+
+# Set the working directory to the folder containing the Python script
+setwd("C:/Users/17347/Documents/Instalytics")
+
+# Define the input value as a string
+input_value <- "gvsucab"
+
+# Call the Python script and pass the input value as an argument
+py_run_string(paste("import instaloader\nimport sys\n\n", 
+                     "def main(input_value):\n",
+                     "\tprint(input_value)\n",
+                     "main('", as.character(input_value), "')", sep = ""), convert = TRUE)
+
+
+
+```
+
+```{r}
+library(plotly)
+
+# Create sample data
+value <- 75
+min_value <- 0
+max_value <- 100
+
+# Create speedometer chart
+p <- plot_ly(
+  type = "indicator",
+  mode = "gauge+number",
+  value = value,
+  gauge = list(
+    axis = list(range = list(min_value, max_value)),
+    bar = list(color = "black"),
+    borderwidth = 2,
+    steps = list(
+      list(range = c(min_value, max_value), color = "green")
+    )
+  ),
+  number = list(
+    font = list(color = "white")
+  )
+)
+
+# Show chart
+p
+
+```
+
+```{r}
+# Load required packages
+library(tidyverse)
+library(lubridate)
+library(plotly)
+
+# Read in data
+
+# Convert date column to datetime format
+Post_info$date_list <- ymd_hms(Post_info$date_list)
+
+# Create new columns for day of week and hour of day
+Post_info$day_of_week <- weekdays(Post_info$date_list)
+Post_info$hour_of_day <- hour(Post_info$date_list)
+
+# Group data by day of week and hour of day, and calculate mean engagement rate
+Post_info_summary <- Post_info %>%
+  group_by(day_of_week, hour_of_day) %>%
+  summarize(mean_engagement_rate = mean(Engagement_Rate))
+
+# Find the day of week and hour of day with the highest engagement rate
+best_day <- Post_info_summary %>%
+  slice_max(mean_engagement_rate) %>%
+  pull(day_of_week)
+
+best_hour <- Post_info_summary %>%
+  slice_max(mean_engagement_rate) %>%
+  pull(hour_of_day)
+
+# Create a plot of engagement rate by day of week and hour of day
+plot_data <- Post_info_summary %>%
+  pivot_wider(names_from = day_of_week, values_from = mean_engagement_rate) %>%
+  arrange(hour_of_day)
+
+plot_ly(plot_data, x = ~hour_of_day, y = ~Monday, name = "Monday", type = 'scatter', mode = 'lines+markers') %>%
+  add_trace(y = ~Tuesday, name = "Tuesday", type = 'scatter', mode = 'lines+markers') %>%
+  add_trace(y = ~Wednesday, name = "Wednesday", type = 'scatter', mode = 'lines+markers') %>%
+  add_trace(y = ~Thursday, name = "Thursday", type = 'scatter', mode = 'lines+markers') %>%
+  add_trace(y = ~Friday, name = "Friday", type = 'scatter', mode = 'lines+markers') %>%
+  add_trace(y = ~Saturday, name = "Saturday", type = 'scatter', mode = 'lines+markers') %>%
+  add_trace(y = ~Sunday, name = "Sunday", type = 'scatter', mode = 'lines+markers') %>%
+  layout(title = "Engagement Rate by Day of Week and Hour of Day",
+         xaxis = list(title = "Hour of Day"),
+         yaxis = list(title = "Engagement Rate"))
+
+```
+
+```{r}
+# Load required packages
+library(tidyverse)
+library(lubridate)
+library(plotly)
+
+
+# Convert date column to datetime format
+Post_info$date_list <- ymd_hms(Post_info$date_list)
+
+# Create new columns for day of week and hour of day
+Post_info$day_of_week <- weekdays(Post_info$date_list)
+Post_info$hour_of_day <- hour(Post_info$date_list)
+
+# Group data by day of week and calculate mean engagement rate
+Post_info_summary_day <- Post_info %>%
+  group_by(day_of_week) %>%
+  summarize(mean_engagement_rate = mean(Engagement_Rate))
+
+# Find the day of week with the highest engagement rate
+best_day <- Post_info_summary_day %>%
+  slice_max(mean_engagement_rate) %>%
+  pull(day_of_week)
+
+# Create a plot of engagement rate by day of week
+plot_day <- ggplot(Post_info_summary_day, aes(x = day_of_week, y = mean_engagement_rate)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  labs(title = "Engagement Rate by Day of Week",
+       x = "Day of Week",
+       y = "Engagement Rate")
+
+# Group data by hour of day and calculate mean engagement rate
+Post_info_summary_hour <- Post_info %>%
+  group_by(hour_of_day) %>%
+  summarize(mean_engagement_rate = mean(Engagement_Rate))
+
+# Find the hour of day with the highest engagement rate
+best_hour <- Post_info_summary_hour %>%
+  slice_max(mean_engagement_rate) %>%
+  pull(hour_of_day)
+
+# Create a plot of engagement rate by hour of day
+plot_hour <- ggplot(Post_info_summary_hour, aes(x = hour_of_day, y = mean_engagement_rate)) +
+  geom_line(color = "steelblue") +
+  labs(title = "Engagement Rate by Hour of Day",
+       x = "Hour of Day",
+       y = "Engagement Rate")
+
+# Group data by day of week and hour of day, and calculate mean engagement rate
+Post_info_summary_both <- Post_info %>%
+  group_by(day_of_week, hour_of_day) %>%
+  summarize(mean_engagement_rate = mean(Engagement_Rate))
+
+# Find the day of week and hour of day with the highest engagement rate
+best_day_hour <- Post_info_summary_both %>%
+  slice_max(mean_engagement_rate) %>%
+  summarize(day_of_week = first(day_of_week),
+            hour_of_day = first(hour_of_day),
+            mean_engagement_rate = first(mean_engagement_rate))
+
+# Create a plot of engagement rate by day of week and hour of day
+plot_both <- plot_ly(Post_info_summary_both, x = ~hour_of_day, y = ~day_of_week, z = ~mean_engagement_rate,
+                     type = "heatmap", colors = "Blues",
+                     colorbar = list(title = "Engagement Rate")) %>%
+  layout(title = "Engagement Rate by Day of Week and Hour of Day",
+         xaxis = list(title = "Hour of Day"),
+         yaxis = list(title = "Day of Week"))
+
+# Print findings
+cat("The best day of the week to post on Instagram is", best_day, "\n")
+cat("The best time of the week to post on Instagram is", best_hour, ":00\n")
+cat("The best day and time of the week to post on Instagram is", head(best_day_hour[order(-best_day_hour$mean_engagement_rate),]$day_of_week, 1), "at", head(best_day_hour[order(-best_day_hour$mean_engagement_rate),]$hour_of_day, 1), ":00\n")
+
+# Print plots
+print(plot_day)
+print(plot_hour)
+print(plot_both)
+
+```
+
+```{r}
+plt <- ggplot(Post_info_summary_hour, aes(x = hour_of_day, y = mean_engagement_rate)) +
+          geom_line(color = "#e763fa",alpha = 0.8) +
+          labs(title = "Engagement Rate by Hour of Day",
+               x = "Hour of Day",
+               y = "Engagement Rate")
+        ggplotly(plt) %>% 
+          layout(xaxis = list(showgrid = FALSE),
+                 yaxis = list(showgrid = FALSE),
+            plot_bgcolor = "black", 
+            paper_bgcolor = "transparent",
+            font = list(color = '#e763fa'))
+```
+
