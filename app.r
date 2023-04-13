@@ -22,10 +22,10 @@ library(magick)
 library(waiter)
 library(reticulate)
 library(lubridate)
-# py_install("pandas")
-# py_install("openpyxl")
-# py_install("pytz")
-# py_install("instaloader")
+py_install("pandas")
+py_install("openpyxl")
+py_install("pytz")
+py_install("instaloader")
 library(shinyalert)
 
 
@@ -92,8 +92,9 @@ ui <- dashboardPage(skin = "black",
                                     id = "tabset1",
                                     tabPanel(title = "Profile Trends",
                                              selectInput("chart", label = tags$span(style="color: white;","Select your chart:"),
-                                                         choices = c("Area Chart", "Line Chart")),
-                                             withSpinner(plotlyOutput("plot"))),
+                                                         choices = c("Line Chart","Area Chart")),
+                                             withSpinner(plotlyOutput("plot")),
+                                             withSpinner(htmlOutput("desc"))),
                                     tabPanel(title = "WordCloud",
                                              tags$div(
                                                id = "center-container",
@@ -104,7 +105,8 @@ ui <- dashboardPage(skin = "black",
                                     ),
                                     tabPanel("Top Hashtags",
                                              sliderInput("seleco", label = tags$span(style="color: white;","How many Hashtags do you want to see?"), min = 1, max = 30, value = 10),
-                                             withSpinner(plotlyOutput("plot2",height = "auto", width = "100%"))
+                                             withSpinner(plotlyOutput("plot2",height = "auto", width = "100%")),
+                                             withSpinner(htmlOutput("hashtagdesc"))
                                     ),
                                     tabPanel("Top Posts",
                                              tags$style("
@@ -150,7 +152,8 @@ ui <- dashboardPage(skin = "black",
                                                column(width = 4,
                                                       withSpinner(valueBoxOutput("day1",width = 3)),
                                                       withSpinner(valueBoxOutput("hour1",width = 3)))
-                                             )
+                                             ),
+                                             withSpinner(htmlOutput("timedesc"))
                                     ),
                                     tabPanel("Overall Summary",
                                              fluidRow(
@@ -259,7 +262,7 @@ server <- function(input, output,session) {
     # Example text
     text <- c()
     for (i in Post_info$Caption_list){
-      text <- append(values,raw_text)
+      text <- append(i,text)
     }
     # Convert the text to a corpus object
     corpus <- Corpus(VectorSource(text))
@@ -780,13 +783,92 @@ server <- function(input, output,session) {
                     "The top-performing post based on sentiment score was a photo with a caption that read ","'",text1[1],"' .",br(),
                     "Overall, the engagement rate and sentiment score are the most important metrics to assess the performance of the profile on Instagram, as they provide insights into how well the content is resonating with the audience and the general tone of the content being posted. The follower and following counts also provide context for the size of the audience and how the account is leveraging its reach. Finally, the analysis of the hashtags used provides insights into the themes and topics that are popular among the audience.")
     output$output <- renderText({
-      paste("<font color=\"#FFFFFF\"><b>",mytext, "</b></font>")
+      paste("<font color=\"#FFFFFF\">",mytext, "</font>")
+    })
+    past_six_months <- Sys.Date() - months(6)
+    trend_diff <- diff(Post_info[Post_info$date >= past_six_months, ]$Engagement_Rate)
+    if (trend_diff[length(trend_diff)] > 0) {
+      trend_direction <- "increased"
+    } else {
+      trend_direction <- "decreased"
+    }
+    
+    
+    output$desc <- renderText({
+      if(input$chart == "Area Chart"){
+        
+        description <- paste(br(),br(),"This area chart shows the engagement rate over time for your Instagram profile. The X-axis represents the timeline, and the Y-axis shows the engagement rate as a percentage. As of the most recent data, your engagement rate is <b>",round(mean(Post_info$likecomment)/Followers * 100,0) ,"%</b>.
+
+The chart is similar to a line chart, but the area under the line is shaded to provide a clearer view of the engagement rate over time. The shaded area represents the range of engagement rates within a given time period. The chart provides insights into how the engagement rate has changed over time, including any patterns or trends.
+
+The line in the chart represents the average engagement rate over time. The shaded area above and below the line shows the range of engagement rates within a given time period. Over the past 6 months, your engagement rate has <b>",trend_direction,"</b> by <b>",round(trend_diff[length(trend_diff)],0),"%</b>. This trend suggests that your current content strategy is resonating well with your audience, and you should continue to create similar content to maintain or improve engagement.
+
+The chart can also provide insights into specific time periods. For example, during <b>", head(Post_info[order(-Post_info$Engagement_Rate),]$date,1),"</b> your engagement rate peaked at <b>", round(head(Post_info[order(-Post_info$Engagement_Rate),]$Engagement_Rate,1),0),"</b>% . This indicates that the content you posted during this time was highly engaging for your audience. You may want to consider revisiting this content and creating similar posts in the future.
+
+Conversely, during <b>", head(Post_info[order(Post_info$Engagement_Rate),]$date,1),"</b>, your engagement rate dropped to <b>", round(head(Post_info[order(Post_info$Engagement_Rate),]$Engagement_Rate,1),0)," </b>%. This suggests that the content you posted during this time was less engaging for your audience. You may want to analyze the content you posted during this period and make changes to improve engagement in the future.
+
+Overall, this area chart is a valuable tool for monitoring your Instagram engagement rate over time and understanding how it changes in response to different factors. By using the insights provided by the chart, you can make informed decisions about your content strategy and improve engagement with your audience.")
+        
+      }
+      else{
+        description <- paste(br(),br(),"This line chart shows the engagement rate over time for your Instagram profile. The X-axis represents the timeline, and the Y-axis shows the engagement rate ((likes + comments / Number of followers) * 100)  as a percentage. As of the most recent data, your engagement rate is <b>",round(mean(Post_info$likecomment)/Followers * 100,0) ,"%</b>.
+
+The line in the chart represents the trend of the engagement rate over time. Over the past 6 months, your engagement rate has <b>",trend_direction,"</b> by <b>",round(trend_diff[length(trend_diff)],0),"%</b>. This trend suggests that your current content strategy is resonating well with your audience, and you should continue to create similar content to maintain or improve engagement.
+
+The chart can also provide insights into specific time periods. For example, during <b>", head(Post_info[order(-Post_info$Engagement_Rate),]$date,1),"</b> your engagement rate peaked at <b>", round(head(Post_info[order(-Post_info$Engagement_Rate),]$Engagement_Rate,1),0),"</b>% . This indicates that the content you posted during this time was highly engaging for your audience. You may want to consider revisiting this content and creating similar posts in the future.
+
+Conversely, during <b>", head(Post_info[order(Post_info$Engagement_Rate),]$date,1),"</b>, your engagement rate dropped to <b>", round(head(Post_info[order(Post_info$Engagement_Rate),]$Engagement_Rate,1),0)," </b>%. This suggests that the content you posted during this time was less engaging for your audience. You may want to analyze the content you posted during this period and make changes to improve engagement in the future.
+
+Overall, this line chart is a valuable tool for monitoring your Instagram engagement rate over time and understanding how it changes in response to different factors. By using the insights provided by the chart, you can make informed decisions about your content strategy and improve engagement with your audience.")
+      }
+      paste("<font color=\"#FFFFFF\">",description,"</font>")
     })
     
-    wordtext1 <- paste(br(),br(),"The word cloud generated for the Instagram analytics dashboard displays the most frequently occurring words in the captions used by the user. The size of each word in the cloud is proportional to its frequency in the captions. By analyzing this word cloud, one can get an overall idea of the themes and topics that the user tends to discuss in their captions. The word cloud can also provide insights into the user's interests, preferences, and the types of content that their followers engage with the most.")
+    wordtext1 <- paste(br(),br(),"The word cloud provides a visual representation of the most commonly used words in the captions of a user. By analyzing the words in the cloud, we can gain insights into the topics and themes that are most prevalent in the user's content.
+
+To generate the word cloud, the Instagram captions were first preprocessed to remove stop words, punctuation, and special characters. This ensures that the most relevant and meaningful words are included in the word cloud.
+
+The size of each word in the cloud corresponds to the frequency of its appearance in the captions. The larger the word, the more frequently it appears in the text. This allows us to quickly identify the most commonly used words and themes.
+
+In the generated word cloud, we can see that certain words appear more frequently than others. These words can provide insights into the topics and themes that are most commonly featured in the user's content. For example, if the word, <em><b> travel </b></em> appears frequently in the cloud, it suggests that the user's content is focused on travel and related topics.
+
+Additionally, the word cloud can reveal patterns in the user's content that may not be immediately apparent. For example, certain words may only appear in captions associated with particular types of posts, such as images of food or nature. These insights can be used to tailor the user's content strategy and create more targeted and engaging content for their audience.
+
+Overall, the word cloud provides a valuable tool for analyzing the Instagram captions of a user and gaining insights into the themes and topics that are most prevalent in their content. By leveraging these insights, the user can create more effective and engaging content that resonates with their audience.")
     output$wordtext <- renderText({
-      paste("<font color=\"#FFFFFF\"><b>",wordtext1, "</b></font>")
+      paste("<font color=\"#FFFFFF\">",wordtext1, "</font>")
     })
+    
+    hast <- paste("The packed bubble chart provides a visual representation of the most commonly used hashtags in the Instagram posts of a user. By analyzing the hashtags in the chart, we can gain insights into the topics and themes that are most prevalent in the user's content.
+
+To generate the packed bubble chart, the Instagram posts were first preprocessed to extract the hashtags used in each post. The hashtags were then counted and sorted in descending order based on their frequency of use. The top hashtags were then displayed in the packed bubble chart.
+
+The size of each bubble in the chart corresponds to the frequency of the associated hashtag's appearance in the posts. The larger the bubble, the more frequently the hashtag was used in the user's posts. This allows us to quickly identify the most commonly used hashtags and themes.
+
+In the generated packed bubble chart, we can see that certain hashtags appear more frequently than others. These hashtags can provide insights into the topics and themes that are most commonly featured in the user's content. For example, if the hashtag <em><b>travel</b></em> appears frequently in the chart, it suggests that the user's content is focused on travel and related topics.
+
+Additionally, the packed bubble chart can reveal patterns in the user's content that may not be immediately apparent. For example, certain hashtags may only appear in posts associated with particular types of content, such as images of food or nature. These insights can be used to tailor the user's content strategy and create more targeted and engaging content for their audience.
+
+Overall, the packed bubble chart provides a valuable tool for analyzing the Instagram posts of a user and gaining insights into the themes and topics that are most prevalent in their content. By leveraging these insights, the user can create more effective and engaging content that resonates with their audience.
+
+As an example, let's say that the packed bubble chart for a particular Instagram user shows that the hashtag <em><b>food</b></em> is the most frequently used, with a bubble size of 30. This suggests that the user's content is heavily focused on food-related topics. Additionally, the hashtag <em><b>travel</b></em> has a bubble size of 20, indicating that travel-related content is also a common theme in the user's posts. By leveraging these insights, the user can create more targeted content that resonates with their audience's interests in food and travel.")
+    
+    output$hashtagdesc <- renderText({
+      paste("<font color=\"#FFFFFF\">",hast, "</font>")
+          })
+ timed <- paste(br(),"Based on our analysis of your Instagram post data, we have identified the best time and day of the week to post in order to maximize engagement with your audience.
+
+First, we analyzed the data to determine which time of day your posts received the most engagement. Our analysis found that your posts received the highest engagement at <b>",head(Post_info_summary_hour[order(-Post_info_summary_hour$mean_engagement_rate),]$hour_of_day,1),":00</b> with an average engagement rate of <b>",round(head(Post_info_summary_hour[order(-Post_info_summary_hour$mean_engagement_rate),]$mean_engagement_rate,1),0),"%</b>.
+
+Next, we analyzed the data to determine which day of the week your posts received the most engagement. Our analysis found that your posts received the highest engagement on <b>",head(Post_info_summary_day[order(-Post_info_summary_day$mean_engagement_rate),]$day_of_week,1),"</b> with an average engagement rate of <b>",round(head(Post_info_summary_day[order(-Post_info_summary_day$mean_engagement_rate),]$mean_engagement_rate,1),0),"%</b>.
+
+Based on these findings, we recommend that you focus your posting schedule on the best time and day of the week. By posting during these times, you are more likely to reach a larger audience and receive higher engagement rates on your posts.
+
+It is important to note that while these are the best times and days for engagement based on your past data, it is also important to continue to analyze and adjust your posting schedule as your audience and trends change. By regularly analyzing your data, you can ensure that you are always maximizing engagement and growing your audience on Instagram.")
+ 
+    output$timedesc <- renderText({
+      paste("<font color=\"#FFFFFF\">",timed, "</font>")
+          })
     output$progressBox <- renderValueBox({
       valueBox(
         paste0(round(mean(Post_info$likecomment),0), ""), "Average Engagement (Likes + Comment)", icon = icon("group-arrows-rotate",lib = "font-awesome"),

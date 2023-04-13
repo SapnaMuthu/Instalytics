@@ -28,8 +28,10 @@ def main(input_value):
         profile_info = [profile.username,profile.biography,profile.followers,profile.followees]
         count = 0
         # Iterate over the profile's posts and append each post's information to the list
-        for post in profile.get_posts():
-            if count % 50 == 0:
+        received = profile.get_posts()
+        loader.close()
+        for post in received:
+            if count % 70 == 0:
                 time.sleep(3)
             while True:
                 try:
@@ -44,7 +46,6 @@ def main(input_value):
                         'url_list': post.url
                     }
                     post_info.append(post_data)
-                    loader.close()
                     break
                 except instaloader.exceptions.TooManyRequestsException as e:
                     print(f"Got 429 Error. Sleeping for {e.retry_after} seconds")

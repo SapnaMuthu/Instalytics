@@ -1067,3 +1067,32 @@ plt <- ggplot(Post_info_summary_hour, aes(x = hour_of_day, y = mean_engagement_r
             font = list(color = '#e763fa'))
 ```
 
+```{r}
+    raw_text <- c()
+    for (values in Post_info$hashtags_list){
+      raw_text <- append(values,raw_text)
+    }
+    
+    # Example text
+    text <- c()
+    for (i in Post_info$Caption_list){
+      text <- append(i,text)
+    }
+    # Convert the text to a corpus object
+    corpus <- Corpus(VectorSource(text))
+    
+    # Perform some text preprocessing
+    corpus <- tm_map(corpus, content_transformer(tolower))
+    corpus <- tm_map(corpus, removePunctuation)
+    corpus <- tm_map(corpus, removeNumbers)
+    corpus <- tm_map(corpus, removeWords, stopwords("english"))
+    
+    # Create a term-document matrix
+    tdm <- TermDocumentMatrix(corpus)
+    
+    # Convert the term-document matrix to a data frame
+    m <- as.data.frame(as.matrix(tdm))
+    m$frequency <- (rowSums(m[1:nrow(m),1:ncol(m)]))
+    raw_text_df <- data.frame(word = tdm$dimnames[[1]],frequency = m$frequency)
+```
+

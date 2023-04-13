@@ -54,8 +54,8 @@ def main(input_value):
     # profile_df = pd.DataFrame(profile_info)
     # Create a new DataFrame with timezone-unaware datetime values
     if input_value == "gvsu":         
-        post_df = pd.read_csv("gvsulakerstore/Post_info.csv")
-        profile_df = pd.read_csv("gvsulakerstore/Prof_info.csv")
+        post_df = pd.read_csv("~/Instalytics/Post_info1.csv")
+        profile_df = pd.read_csv("~/Instalytics/Prof_info1.csv")
         #post_df_no_tz = post_df.copy()
 
         # Write the DataFrame to an Excel file
